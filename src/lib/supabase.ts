@@ -8,6 +8,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const isValidUrl = supabaseUrl && supabaseUrl !== 'your_supabase_url_here' && supabaseUrl.startsWith('https://')
 const isValidKey = supabaseAnonKey && supabaseAnonKey !== 'your_supabase_anon_key_here'
 
+// Singleton browser client to avoid multiple instances
+let browserClientInstance: ReturnType<typeof createBrowserClient> | null = null
+
 export const supabase = isValidUrl && isValidKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
@@ -16,5 +19,11 @@ export function createSupabaseBrowserClient() {
   if (!isValidUrl || !isValidKey) {
     throw new Error('Missing or invalid Supabase environment variables')
   }
-  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+  
+  // Return singleton instance to prevent multiple GoTrueClient instances
+  if (!browserClientInstance) {
+    browserClientInstance = createBrowserClient(supabaseUrl, supabaseAnonKey)
+  }
+  
+  return browserClientInstance
 }

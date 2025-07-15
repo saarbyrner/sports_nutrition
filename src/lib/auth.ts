@@ -15,7 +15,11 @@ export interface AuthState {
 }
 
 export class AuthService {
-  private supabase = createSupabaseBrowserClient()
+  private supabase: ReturnType<typeof createSupabaseBrowserClient>
+  
+  constructor() {
+    this.supabase = createSupabaseBrowserClient()
+  }
 
   async signIn(email: string, password: string) {
     try {
@@ -102,4 +106,14 @@ export class AuthService {
       }
     })
   }
+}
+
+// Export singleton instance to prevent multiple AuthService instances
+let authServiceInstance: AuthService | null = null
+
+export function getAuthService(): AuthService {
+  if (!authServiceInstance) {
+    authServiceInstance = new AuthService()
+  }
+  return authServiceInstance
 }

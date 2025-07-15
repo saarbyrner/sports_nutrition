@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { AuthService, AuthUser, AuthState } from '@/lib/auth'
+import { getAuthService, AuthUser, AuthState } from '@/lib/auth'
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ user: AuthUser | null; error: string | null }>
@@ -36,12 +36,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     error: null
   })
 
-  const [authService, setAuthService] = useState<AuthService | null>(null)
+  const [authService, setAuthService] = useState<ReturnType<typeof getAuthService> | null>(null)
 
   useEffect(() => {
     // Only create auth service on the client side
     try {
-      const service = new AuthService()
+      const service = getAuthService()
       setAuthService(service)
       
       // Initialize auth state
