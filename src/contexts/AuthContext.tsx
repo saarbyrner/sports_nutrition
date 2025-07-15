@@ -36,42 +36,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
     error: null
   })
 
-  const authService = new AuthService()
+  const [authService, setAuthService] = useState<AuthService | null>(null)
 
   useEffect(() => {
-    // Initialize auth state
-    const initAuth = async () => {
-      try {
-        const user = await authService.getCurrentUser()
-        setAuthState({
-          user,
-          loading: false,
-          error: null
-        })
-      } catch (error) {
-        setAuthState({
-          user: null,
-          loading: false,
-          error: error instanceof Error ? error.message : 'Authentication failed'
-        })
+    // Only create auth service on the client side
+    try {
+      const service = new AuthService()
+      setAuthService(service)
+      
+      // Initialize auth state
+      const initAuth = async () => {
+        try {
+          const user = await service.getCurrentUser()
+          setAuthState({
+            user,
+            loading: false,
+            error: null
+          })
+        } catch (error) {
+          setAuthState({
+            user: null,
+            loading: false,
+            error: error instanceof Error ? error.message : 'Authentication failed'
+          })
+        }
       }
+
+      initAuth()
+
+      // Listen for auth changes
+      const { data: { subscription } } = service.onAuthStateChange((user) => {
+        setAuthState(prev => ({
+          ...prev,
+          user,
+          loading: false
+        }))
+      })
+
+      return () => subscription.unsubscribe()
+    } catch (error) {
+      // Handle case where Supabase environment variables are missing
+      setAuthState({
+        user: null,
+        loading: false,
+        error: 'Missing Supabase configuration'
+      })
     }
-
-    initAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((user) => {
-      setAuthState(prev => ({
-        ...prev,
-        user,
-        loading: false
-      }))
-    })
-
-    return () => subscription.unsubscribe()
   }, [])
 
   const signIn = async (email: string, password: string) => {
+    if (!authService) {
+      return { user: null, error: 'Authentication service not available' }
+    }
+    
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
     
     const result = await authService.signIn(email, password)
@@ -92,6 +109,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     organization: string
     phone?: string
   }) => {
+    if (!authService) {
+      return { user: null, error: 'Authentication service not available' }
+    }
+    
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
     
     const result = await authService.signUp(email, password, userData)
@@ -106,6 +127,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   const signOut = async () => {
+    if (!authService) {
+      return { error: 'Authentication service not available' }
+    }
+    
     setAuthState(prev => ({ ...prev, loading: true }))
     
     const result = await authService.signOut()
