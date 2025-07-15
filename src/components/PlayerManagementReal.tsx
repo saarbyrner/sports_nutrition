@@ -47,6 +47,8 @@ import {
 import { usePlayerService } from '@/hooks/usePlayerService'
 import { Player } from '@/lib/services/types'
 import { format } from 'date-fns'
+import AddPlayerModalReal from './AddPlayerModalReal'
+import PlayerImportModal from './PlayerImportModal'
 
 interface PlayerManagementRealProps {
   onPlayerSelect?: (playerId: string) => void
@@ -161,18 +163,12 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button variant="outline">
-            <Upload className="h-4 w-4 mr-2" />
-            Import
-          </Button>
+          <PlayerImportModal onPlayersImported={loadData} />
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Player
-          </Button>
+          <AddPlayerModalReal onPlayerAdded={loadData} />
         </div>
       </div>
 

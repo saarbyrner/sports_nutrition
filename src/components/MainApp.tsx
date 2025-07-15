@@ -33,7 +33,7 @@ import {
 
 // Import components
 import Dashboard from "./Dashboard";
-import PlayerManagement from "./PlayerManagement";
+import PlayerManagementReal from "./PlayerManagementReal";
 import PlayerProfile from "./PlayerProfile";
 import AIPlanning from "./AIPlanning";
 import CreatePlanPage from "./CreatePlanPage";
@@ -156,7 +156,7 @@ export default function MainApp() {
       case "dashboard":
         return <Dashboard onPlayerSelect={handlePlayerSelect} />;
       case "players":
-        return <PlayerManagement onPlayerSelect={handlePlayerSelect} />;
+        return <PlayerManagementReal onPlayerSelect={handlePlayerSelect} />;
       case "player-profile":
         return (
           <PlayerProfile
