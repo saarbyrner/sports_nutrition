@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
 import { 
   Brain,
   Sparkles,
@@ -27,17 +28,13 @@ import {
   Edit,
   CheckCircle,
   Download,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
+import { useMealPlanService } from '@/hooks/useMealPlanService';
+import { usePlayerService } from '@/hooks/usePlayerService';
+import { Player, CreateMealPlanData } from '@/lib/services/types';
 
-// Mock data for players
-const mockPlayers = [
-  { id: "p1", name: "Marcus Johnson", avatar: "MJ" },
-  { id: "p2", name: "Sarah Williams", avatar: "SW" },
-  { id: "p3", name: "David Chen", avatar: "DC" },
-  { id: "p4", name: "Emily Rodriguez", avatar: "ER" },
-  { id: "p5", name: "Alex Thompson", avatar: "AT" },
-];
 
 const sampleMealPlan = {
   breakfast: {
@@ -108,16 +105,35 @@ const sampleMealPlan = {
 interface CreatePlanModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPlanCreate: (planData: any) => void;
+  onPlanCreate?: () => void;
 }
 
 function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalProps) {
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const [planType, setPlanType] = useState("");
   const [duration, setDuration] = useState("");
+  const [planTitle, setPlanTitle] = useState("");
   const [specialConsiderations, setSpecialConsiderations] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState(null);
+  const [players, setPlayers] = useState<Player[]>([]);
+
+  const { createMealPlan, loading: mealPlanLoading, error: mealPlanError, clearError } = useMealPlanService();
+  const { getPlayers, loading: playersLoading } = usePlayerService();
+
+  // Load players when modal opens
+  useEffect(() => {
+    if (open) {
+      loadPlayers();
+    }
+  }, [open]);
+
+  const loadPlayers = async () => {
+    const result = await getPlayers();
+    if (result?.data) {
+      setPlayers(result.data);
+    }
+  };
 
   const handleGeneratePlan = async () => {
     if (!selectedPlayer || !planType || !duration) return;
@@ -130,38 +146,49 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
     }, 3000);
   };
 
-  const handleCreatePlan = () => {
-    if (!generatedPlan) return;
+  const handleCreatePlan = async () => {
+    if (!generatedPlan || !selectedPlayer) return;
 
-    const selectedPlayerData = mockPlayers.find(p => p.id === selectedPlayer);
-    const planData = {
-      id: `plan-${Date.now()}`,
-      playerName: selectedPlayerData?.name,
-      playerId: selectedPlayer,
-      planType: planType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      duration,
-      dateCreated: new Date().toISOString().split('T')[0],
-      status: 'active',
+    const mealPlanData: CreateMealPlanData = {
+      player_id: selectedPlayer,
+      title: planTitle || `${planType.replace('_', ' ')} Plan`,
+      description: specialConsiderations || undefined,
+      plan_type: planType,
       calories: Object.values(generatedPlan).reduce((sum: number, meal: any) => sum + meal.calories, 0),
-      aiConfidence: Math.floor(Math.random() * 15) + 85, // Random between 85-100
-      editedBy: 'AI Generated',
-      specialConsiderations,
-      mealPlan: generatedPlan,
-      avatar: selectedPlayerData?.avatar
+      protein: Object.values(generatedPlan).reduce((sum: number, meal: any) => sum + meal.protein, 0),
+      carbs: Object.values(generatedPlan).reduce((sum: number, meal: any) => sum + meal.carbs, 0),
+      fat: Object.values(generatedPlan).reduce((sum: number, meal: any) => sum + meal.fat, 0),
+      duration_days: getDurationDays(),
+      meal_data: generatedPlan
     };
 
-    onPlanCreate(planData);
-    handleReset();
-    onOpenChange(false);
+    const result = await createMealPlan(mealPlanData);
+    if (result) {
+      onPlanCreate?.();
+      handleReset();
+      onOpenChange(false);
+    }
+  };
+
+  const getDurationDays = () => {
+    switch (duration) {
+      case '1_week': return 7;
+      case '2_weeks': return 14;
+      case '1_month': return 30;
+      case '3_months': return 90;
+      default: return 7;
+    }
   };
 
   const handleReset = () => {
     setSelectedPlayer("");
     setPlanType("");
     setDuration("");
+    setPlanTitle("");
     setSpecialConsiderations("");
     setGeneratedPlan(null);
     setIsGenerating(false);
+    clearError();
   };
 
   const handleCancel = () => {
@@ -204,16 +231,27 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
                     <SelectValue placeholder="Choose a player" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockPlayers.map((player) => (
+                    {players.map((player) => (
                       <SelectItem
                         key={player.id}
                         value={player.id}
                       >
-                        {player.name}
+                        {player.user ? `${player.user.first_name} ${player.user.last_name}` : 'Unknown Player'}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">
+                  Plan Title
+                </label>
+                <Input
+                  value={planTitle}
+                  onChange={(e) => setPlanTitle(e.target.value)}
+                  placeholder="Enter plan title (optional)"
+                />
               </div>
 
               <div className="space-y-3">
@@ -228,23 +266,17 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
                     <SelectValue placeholder="Select plan type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="weight_gain">
-                      Weight Gain
+                    <SelectItem value="training">
+                      Training
                     </SelectItem>
-                    <SelectItem value="weight_loss">
-                      Weight Loss
-                    </SelectItem>
-                    <SelectItem value="maintenance">
-                      Maintenance
-                    </SelectItem>
-                    <SelectItem value="competition_prep">
-                      Competition Prep
+                    <SelectItem value="competition">
+                      Competition
                     </SelectItem>
                     <SelectItem value="recovery">
                       Recovery
                     </SelectItem>
-                    <SelectItem value="endurance">
-                      Endurance
+                    <SelectItem value="general">
+                      General
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -297,7 +329,8 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
                   !selectedPlayer ||
                   !planType ||
                   !duration ||
-                  isGenerating
+                  isGenerating ||
+                  playersLoading
                 }
                 className="w-full h-12 text-base"
               >
@@ -305,6 +338,11 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
                   <>
                     <Sparkles className="h-5 w-5 mr-3 animate-spin" />
                     Generating Plan...
+                  </>
+                ) : playersLoading ? (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-3 animate-spin" />
+                    Loading Players...
                   </>
                 ) : (
                   <>
@@ -430,6 +468,17 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
           </Card>
         </div>
 
+        {/* Error Display */}
+        {mealPlanError && (
+          <div className="bg-destructive/15 border border-destructive/20 rounded-lg p-4 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <p className="text-sm text-destructive">{mealPlanError}</p>
+            <Button variant="ghost" size="sm" onClick={clearError} className="ml-auto">
+              Dismiss
+            </Button>
+          </div>
+        )}
+
         <DialogFooter className="flex items-center justify-between pt-6 border-t">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <Brain className="w-5 h-5" />
@@ -442,11 +491,20 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
             </Button>
             <Button 
               onClick={handleCreatePlan} 
-              disabled={!generatedPlan}
+              disabled={!generatedPlan || mealPlanLoading}
               className="h-11 px-6"
             >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Create Plan
+              {mealPlanLoading ? (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Create Plan
+                </>
+              )}
             </Button>
           </div>
         </DialogFooter>

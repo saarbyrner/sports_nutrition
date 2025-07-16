@@ -39,48 +39,68 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authService, setAuthService] = useState<ReturnType<typeof getAuthService> | null>(null)
 
   useEffect(() => {
+    let mounted = true
+    let subscription: any = null
+
     // Only create auth service on the client side
-    try {
-      const service = getAuthService()
-      setAuthService(service)
-      
-      // Initialize auth state
-      const initAuth = async () => {
+    const initializeAuth = async () => {
+      try {
+        const service = getAuthService()
+        if (!mounted) return
+
+        setAuthService(service)
+        
+        // Initialize auth state
         try {
           const user = await service.getCurrentUser()
+          if (!mounted) return
+
           setAuthState({
             user,
             loading: false,
             error: null
           })
         } catch (error) {
+          if (!mounted) return
+
           setAuthState({
             user: null,
             loading: false,
             error: error instanceof Error ? error.message : 'Authentication failed'
           })
         }
+
+        // Listen for auth changes
+        const { data } = service.onAuthStateChange((user) => {
+          if (!mounted) return
+          
+          setAuthState(prev => ({
+            ...prev,
+            user,
+            loading: false
+          }))
+        })
+
+        subscription = data.subscription
+      } catch (error) {
+        if (!mounted) return
+        
+        // Handle case where Supabase environment variables are missing
+        setAuthState({
+          user: null,
+          loading: false,
+          error: 'Missing Supabase configuration'
+        })
       }
+    }
 
-      initAuth()
+    initializeAuth()
 
-      // Listen for auth changes
-      const { data: { subscription } } = service.onAuthStateChange((user) => {
-        setAuthState(prev => ({
-          ...prev,
-          user,
-          loading: false
-        }))
-      })
-
-      return () => subscription.unsubscribe()
-    } catch (error) {
-      // Handle case where Supabase environment variables are missing
-      setAuthState({
-        user: null,
-        loading: false,
-        error: 'Missing Supabase configuration'
-      })
+    return () => {
+      mounted = false
+      if (subscription) {
+        subscription.unsubscribe()
+      }
     }
   }, [])
 

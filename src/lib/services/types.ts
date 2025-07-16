@@ -115,20 +115,107 @@ export interface UpdatePlayerData {
 export interface MealPlan {
   id: string
   player_id: string
-  dietitian_id: string
   title: string
   description?: string
-  start_date: string
-  end_date: string
+  plan_type?: string // 'recovery', 'competition', 'training', 'general'
   status: MealPlanStatus
-  meals: any[] // JSON structure for meals
-  nutritional_targets: any // JSON structure for targets
-  notes?: string
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  duration_days?: number
+  start_date?: string
+  end_date?: string
+  ai_confidence?: number
+  meal_data: any // JSONB structure for meals
+  created_by?: string
   created_at: string
   updated_at: string
   // Joined data
   player?: Player
-  dietitian?: User
+  created_by_user?: User
+}
+
+export interface CreateMealPlanData {
+  player_id: string
+  title: string
+  description?: string
+  plan_type?: string
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  duration_days?: number
+  start_date?: string
+  end_date?: string
+  meal_data: any
+}
+
+export interface UpdateMealPlanData {
+  title?: string
+  description?: string
+  plan_type?: string
+  status?: MealPlanStatus
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  duration_days?: number
+  start_date?: string
+  end_date?: string
+  ai_confidence?: number
+  meal_data?: any
+}
+
+export interface Template {
+  id: string
+  name: string
+  category?: string
+  description?: string
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  meal_plan: any // JSONB structure
+  tags: string[]
+  times_used: number
+  created_by?: string
+  organization?: string
+  created_at: string
+  updated_at: string
+  // Joined data
+  created_by_user?: User
+}
+
+export interface CreateTemplateData {
+  name: string
+  category?: string
+  description?: string
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  meal_plan: any
+  tags?: string[]
+  organization?: string
+}
+
+export interface UpdateTemplateData {
+  name?: string
+  category?: string
+  description?: string
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  fiber?: number
+  meal_plan?: any
+  tags?: string[]
 }
 
 export interface CalendarEvent {

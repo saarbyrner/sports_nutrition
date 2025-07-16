@@ -26,7 +26,8 @@ export abstract class BaseService {
     return {
       data,
       count: count ?? null,
-      error: null
+      error: null,
+      success: true
     }
   }
 
@@ -37,7 +38,8 @@ export abstract class BaseService {
     return {
       data: null,
       count: null,
-      error: error.message || 'An unexpected error occurred'
+      error: error.message || 'An unexpected error occurred',
+      success: false
     }
   }
 }
@@ -49,6 +51,7 @@ export interface ServiceResponse<T> {
   data: T | null
   count?: number | null
   error: string | null
+  success: boolean
 }
 
 /**

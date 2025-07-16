@@ -35,11 +35,11 @@ import {
 import Dashboard from "./Dashboard";
 import PlayerManagementReal from "./PlayerManagementReal";
 import PlayerProfile from "./PlayerProfile";
-import AIPlanning from "./AIPlanning";
+import MealPlanManagementTest from "./MealPlanManagementTest";
 import CreatePlanPage from "./CreatePlanPage";
 import Collaboration from "./Collaboration";
-import NutritionCalendar from "./NutritionCalendar";
-import Analytics from "./Analytics";
+import NutritionCalendarReal from "./NutritionCalendarReal";
+import AnalyticsReal from "./AnalyticsReal";
 import SettingsPage from "./Settings";
 import UserProfile from "./UserProfile";
 
@@ -166,14 +166,8 @@ export default function MainApp() {
         );
       case "ai-planning":
         return (
-          <AIPlanning 
-            onCreatePlan={handleCreatePlan}
-            mealPlans={mealPlans}
-            onPlanCreate={handlePlanCreate}
-            templates={templates}
-            onTemplateCreate={handleTemplateCreate}
-            onTemplateUpdate={handleTemplateUpdate}
-            onTemplateDelete={handleTemplateDelete}
+          <MealPlanManagementTest 
+            onPlanSelect={(planId) => console.log('Selected plan:', planId)}
           />
         );
       case "create-plan":
@@ -187,14 +181,9 @@ export default function MainApp() {
       case "collaboration":
         return <Collaboration />;
       case "analytics":
-        return (
-          <Analytics
-            currentReport={currentReport}
-            onReportChange={handleReportChange}
-          />
-        );
+        return <AnalyticsReal />;
       case "calendar":
-        return <NutritionCalendar onPlayerSelect={handlePlayerSelect} />;
+        return <NutritionCalendarReal onPlayerSelect={handlePlayerSelect} />;
       case "settings":
         return (
           <SettingsPage

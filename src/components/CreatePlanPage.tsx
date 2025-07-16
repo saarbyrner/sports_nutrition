@@ -962,6 +962,17 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
         </TabsContent>
       </Tabs>
 
+      {/* Error Display */}
+      {mealPlanError && (
+        <div className="bg-destructive/15 border border-destructive/20 rounded-lg p-4 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <p className="text-sm text-destructive">{mealPlanError}</p>
+          <Button variant="ghost" size="sm" onClick={clearError} className="ml-auto">
+            Dismiss
+          </Button>
+        </div>
+      )}
+
       {/* Template Selector Modal */}
       <Dialog open={showTemplateSelector} onOpenChange={setShowTemplateSelector}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">

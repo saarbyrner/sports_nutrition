@@ -6,9 +6,11 @@
 export * from './base'
 export * from './types'
 export * from './player'
+export * from './calendar'
 
 // Import services
 import { PlayerService } from './player'
+import { CalendarService } from './calendar'
 
 /**
  * Service Manager - Singleton pattern for service instances
@@ -16,6 +18,7 @@ import { PlayerService } from './player'
 class ServiceManager {
   private static instance: ServiceManager
   private _playerService: PlayerService | null = null
+  private _calendarService: CalendarService | null = null
 
   private constructor() {}
 
@@ -33,9 +36,15 @@ class ServiceManager {
     return this._playerService
   }
 
+  get calendarService(): CalendarService {
+    if (!this._calendarService) {
+      this._calendarService = new CalendarService()
+    }
+    return this._calendarService
+  }
+
   // Add more services here as we create them
   // get mealPlanService(): MealPlanService { ... }
-  // get calendarService(): CalendarService { ... }
   // get analyticsService(): AnalyticsService { ... }
 }
 
@@ -48,6 +57,7 @@ export const services = ServiceManager.getInstance()
  * Individual service exports for direct access
  */
 export const playerService = services.playerService
+export const calendarService = services.calendarService
 
 /**
  * Convenience hook for React components
