@@ -142,13 +142,6 @@ const CustomToolbar = ({ label, onNavigate, onView, view }) => {
         >
           Day
         </Button>
-        <Button
-          variant={view === "agenda" ? "default" : "outline"}
-          size="sm"
-          onClick={() => onView("agenda")}
-        >
-          Agenda
-        </Button>
       </div>
     </div>
   );
@@ -414,7 +407,7 @@ function NutritionCalendarReal({
                 onSelectSlot={handleSelectSlot}
                 selectable
                 eventPropGetter={eventStyleGetter}
-                views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+                views={[Views.MONTH, Views.WEEK, Views.DAY]}
                 view={view}
                 onView={setView}
                 date={date}

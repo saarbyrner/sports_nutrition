@@ -31,7 +31,7 @@ export interface CalendarEventWithAttendees extends CalendarEvent {
 }
 
 export class CalendarService extends BaseService {
-  private supabase = createSupabaseBrowserClient()
+  protected supabase = createSupabaseBrowserClient()
 
   async getEvents(options?: {
     pagination?: PaginationOptions
@@ -108,7 +108,7 @@ export class CalendarService extends BaseService {
 
       // Fetch attendees for each event
       const eventsWithAttendees = await Promise.all(
-        (data || []).map(async (event) => {
+        (data || []).map(async (event: CalendarEvent) => {
           const { data: attendees } = await this.supabase
             .from('users')
             .select('id, email, first_name, last_name, avatar_url')
@@ -302,7 +302,7 @@ export class CalendarService extends BaseService {
       }
 
       // Count events by type
-      const byType = (typeRes.data || []).reduce((acc, event) => {
+      const byType = (typeRes.data || []).reduce((acc: Record<EventType, number>, event: CalendarEvent) => {
         acc[event.event_type as EventType] = (acc[event.event_type as EventType] || 0) + 1
         return acc
       }, {} as Record<EventType, number>)
