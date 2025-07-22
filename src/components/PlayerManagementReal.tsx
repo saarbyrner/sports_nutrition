@@ -48,7 +48,11 @@ import { usePlayerService } from '@/hooks/usePlayerService'
 import { Player } from '@/lib/services/types'
 import { format } from 'date-fns'
 import AddPlayerModalReal from './AddPlayerModalReal'
+import EditPlayerModalReal from './EditPlayerModalReal'
 import PlayerImportModal from './PlayerImportModal'
+import SectionErrorBoundary from './SectionErrorBoundary'
+import PlayerTableSkeleton from './skeletons/PlayerTableSkeleton'
+import PlayerStatsSkeleton from './skeletons/PlayerStatsSkeleton'
 
 interface PlayerManagementRealProps {
   onPlayerSelect?: (playerId: string) => void
@@ -62,6 +66,8 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
   const [sportFilter, setSportFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
+  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const {
     loading,
@@ -116,6 +122,15 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
   // Get unique teams and sports for filters
   const uniqueTeams = Array.from(new Set(players.map(p => p.team).filter(Boolean)))
   const uniqueSports = Array.from(new Set(players.map(p => p.sport).filter(Boolean)))
+
+  const handleEditPlayer = (player: Player) => {
+    setEditingPlayer(player)
+    setShowEditModal(true)
+  }
+
+  const handlePlayerUpdated = async (updatedPlayer: Player) => {
+    await loadData() // Refresh the list to show updated data
+  }
 
   const handleDeletePlayer = async (playerId: string) => {
     if (window.confirm('Are you sure you want to delete this player? This action cannot be undone.')) {
@@ -184,7 +199,14 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <SectionErrorBoundary 
+        title="Stats Loading Error"
+        description="Unable to load player statistics"
+      >
+        {loading ? (
+          <PlayerStatsSkeleton />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Players</CardTitle>
@@ -221,7 +243,9 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
             <div className="text-2xl font-bold">{Object.keys(stats.byTeam).length}</div>
           </CardContent>
         </Card>
-      </div>
+          </div>
+        )}
+      </SectionErrorBoundary>
 
       {/* Filters */}
       <Card>
@@ -280,34 +304,34 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
       </Card>
 
       {/* Players Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Players ({players.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Player</TableHead>
-                  <TableHead>Position</TableHead>
-                  <TableHead>Team</TableHead>
-                  <TableHead>Sport</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Jersey #</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
-                      <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
-                      Loading players...
-                    </TableCell>
-                  </TableRow>
-                ) : players.length === 0 ? (
+      <SectionErrorBoundary 
+        title="Player Table Error"
+        description="Unable to load player data table"
+      >
+        {loading ? (
+          <PlayerTableSkeleton rows={pageSize} />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Players ({players.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Player</TableHead>
+                      <TableHead>Position</TableHead>
+                      <TableHead>Team</TableHead>
+                      <TableHead>Sport</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Jersey #</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {players.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No players found
@@ -325,7 +349,10 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-medium">
+                            <div 
+                              className="font-medium cursor-pointer hover:text-blue-600 hover:underline transition-colors"
+                              onClick={() => onPlayerSelect?.(player.id)}
+                            >
                               {player.user ? `${player.user.first_name} ${player.user.last_name}` : 'Unknown'}
                             </div>
                             <div className="text-sm text-muted-foreground">
@@ -358,7 +385,7 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditPlayer(player)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit Player
                             </DropdownMenuItem>
@@ -381,6 +408,16 @@ export default function PlayerManagementReal({ onPlayerSelect }: PlayerManagemen
           </div>
         </CardContent>
       </Card>
+        )}
+      </SectionErrorBoundary>
+
+      {/* Edit Player Modal */}
+      <EditPlayerModalReal
+        player={editingPlayer}
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        onPlayerUpdated={handlePlayerUpdated}
+      />
     </div>
   )
 }

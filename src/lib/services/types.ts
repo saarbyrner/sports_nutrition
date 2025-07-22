@@ -5,7 +5,7 @@
 export type UserRole = 'admin' | 'dietitian' | 'coach' | 'player'
 export type PlayerStatus = 'active' | 'inactive' | 'injured' | 'suspended'
 export type MealPlanStatus = 'active' | 'draft' | 'completed' | 'archived'
-export type EventType = 'training' | 'meal' | 'competition' | 'recovery' | 'meeting'
+export type EventType = 'meal_plan' | 'appointment'
 
 export interface User {
   id: string
@@ -226,7 +226,9 @@ export interface CalendarEvent {
   start_time: string
   end_time: string
   location?: string
-  attendee_ids: string[]
+  attendees: string[]
+  is_private: boolean
+  organization?: string
   created_by: string
   meal_plan_id?: string
   metadata?: any
@@ -234,5 +236,5 @@ export interface CalendarEvent {
   updated_at: string
   // Joined data
   created_by_user?: User
-  attendees?: User[]
+  attendee_users?: User[]
 }

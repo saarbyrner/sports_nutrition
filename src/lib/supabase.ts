@@ -11,9 +11,8 @@ const isValidKey = supabaseAnonKey && supabaseAnonKey !== 'your_supabase_anon_ke
 // Singleton browser client to avoid multiple instances
 let browserClientInstance: ReturnType<typeof createBrowserClient> | null = null
 
-export const supabase = isValidUrl && isValidKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null
+// Remove the standalone client to prevent conflicts
+export const supabase = null
 
 export function createSupabaseBrowserClient() {
   if (!isValidUrl || !isValidKey) {

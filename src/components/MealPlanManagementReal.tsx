@@ -54,8 +54,12 @@ import {
 import { useMealPlanService } from '@/hooks/useMealPlanService'
 import { MealPlan, Template } from '@/lib/services/types'
 import { format } from 'date-fns'
-import CreatePlanModal from './CreatePlanModal'
+import CreatePlanModal from './CreatePlanModalNew'
 import CreatePlanPage from './CreatePlanPage'
+import TemplateDetailsModal from './TemplateDetailsModal'
+import MealPlanDetailsModal from './MealPlanDetailsModal'
+import TemplateEditorModal from './TemplateEditorModal'
+import MealPlanEditorModal from './MealPlanEditorModal'
 
 interface MealPlanManagementRealProps {
   onPlanSelect?: (planId: string) => void
@@ -72,6 +76,13 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCreatePage, setShowCreatePage] = useState(false)
   const [activeTab, setActiveTab] = useState('plans')
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [showTemplateDetails, setShowTemplateDetails] = useState(false)
+  const [selectedMealPlan, setSelectedMealPlan] = useState<MealPlan | null>(null)
+  const [showMealPlanDetails, setShowMealPlanDetails] = useState(false)
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false)
+  const [showMealPlanEditor, setShowMealPlanEditor] = useState(false)
+  const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
 
   const {
     loading,
@@ -80,7 +91,11 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
     getMealPlans,
     getTemplates,
     deleteMealPlan,
-    getMealPlanStats
+    getMealPlanStats,
+    createMealPlan,
+    updateMealPlan,
+    createTemplate,
+    updateTemplate
   } = useMealPlanService()
 
   const [stats, setStats] = useState({
@@ -140,6 +155,58 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
     }
   }
 
+  const handleViewTemplate = (template: Template) => {
+    setSelectedTemplate(template)
+    setShowTemplateDetails(true)
+  }
+
+  const handleViewMealPlan = (mealPlan: MealPlan) => {
+    setSelectedMealPlan(mealPlan)
+    setShowMealPlanDetails(true)
+  }
+
+  const handleEditTemplate = (template: Template) => {
+    setSelectedTemplate(template)
+    setEditorMode('edit')
+    setShowTemplateEditor(true)
+  }
+
+  const handleEditMealPlan = (mealPlan: MealPlan) => {
+    setSelectedMealPlan(mealPlan)
+    setEditorMode('edit')
+    setShowMealPlanEditor(true)
+  }
+
+  const handleSaveTemplate = async (templateData: Partial<Template>): Promise<boolean> => {
+    try {
+      if (editorMode === 'create') {
+        await createTemplate(templateData)
+      } else {
+        await updateTemplate(templateData.id!, templateData)
+      }
+      await loadData() // Refresh the data
+      return true
+    } catch (error) {
+      console.error('Error saving template:', error)
+      return false
+    }
+  }
+
+  const handleSaveMealPlan = async (mealPlanData: Partial<MealPlan>): Promise<boolean> => {
+    try {
+      if (editorMode === 'create') {
+        await createMealPlan(mealPlanData)
+      } else {
+        await updateMealPlan(mealPlanData.id!, mealPlanData)
+      }
+      await loadData() // Refresh the data
+      return true
+    } catch (error) {
+      console.error('Error saving meal plan:', error)
+      return false
+    }
+  }
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'active': return 'default'
@@ -186,27 +253,15 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meal Plan Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Nutrition Planning</h1>
           <p className="text-muted-foreground">
-            Create, manage, and track nutrition plans for your athletes
+            Create and manage personalized nutrition plans for your athletes
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={loadData} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Button onClick={() => setShowCreateModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Quick Create
-          </Button>
+        <div className="flex items-center gap-3">
           <Button onClick={() => setShowCreatePage(true)}>
-            <Brain className="h-4 w-4 mr-2" />
-            Advanced Create
+            <Plus className="h-4 w-4 mr-2" />
+            New Plan
           </Button>
         </div>
       </div>
@@ -227,7 +282,7 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="plans" className="flex items-center gap-2">
             <Utensils className="h-4 w-4" />
-            Meal Plans ({stats.total})
+            My Plans ({stats.total})
           </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" />
@@ -241,7 +296,7 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Plans</CardTitle>
+                <CardTitle className="text-sm font-medium">All Plans</CardTitle>
                 <Utensils className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -326,7 +381,7 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
           {/* Meal Plans Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Meal Plans ({mealPlans.length})</CardTitle>
+              <CardTitle>Your Plans ({mealPlans.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -348,13 +403,17 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
                       <TableRow>
                         <TableCell colSpan={8} className="text-center py-8">
                           <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
-                          Loading meal plans...
+                          Loading your nutrition plans...
                         </TableCell>
                       </TableRow>
                     ) : mealPlans.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No meal plans found
+                        <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                          <Utensils className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <div className="space-y-2">
+                            <p className="font-medium">No nutrition plans yet</p>
+                            <p className="text-sm">Create your first plan to get started</p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -371,14 +430,20 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
                           <TableCell>
                             <div className="flex items-center space-x-3">
                               <Avatar className="h-8 w-8">
-                                <AvatarImage src="" />
+                                <AvatarImage src={plan.player?.user?.avatar_url} />
                                 <AvatarFallback>
-                                  P
+                                  {plan.player?.user ? 
+                                    `${plan.player.user.first_name.charAt(0)}${plan.player.user.last_name.charAt(0)}` : 
+                                    'P'
+                                  }
                                 </AvatarFallback>
                               </Avatar>
                               <div>
                                 <div className="font-medium">
-                                  Player {plan.player_id.substring(0, 8)}...
+                                  {plan.player?.user ? 
+                                    `${plan.player.user.first_name} ${plan.player.user.last_name}` : 
+                                    `Player ${plan.player_id.substring(0, 8)}...`
+                                  }
                                 </div>
                                 <div className="text-sm text-muted-foreground">
                                   {plan.player?.team || 'No team'}
@@ -418,11 +483,11 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => onPlanSelect?.(plan.id)}>
+                                <DropdownMenuItem onClick={() => handleViewMealPlan(plan)}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditMealPlan(plan)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Edit Plan
                                 </DropdownMenuItem>
@@ -451,7 +516,7 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         <TabsContent value="templates" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Meal Plan Templates ({templates.length})</CardTitle>
+              <CardTitle>Plan Templates ({templates.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -485,11 +550,20 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
                           </Badge>
                         )}
                         <div className="flex gap-2 pt-2">
-                          <Button size="sm" className="flex-1">
+                          <Button 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => handleViewTemplate(template)}
+                          >
                             <Eye className="h-4 w-4 mr-1" />
                             View
                           </Button>
-                          <Button variant="outline" size="sm" className="flex-1">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => handleEditTemplate(template)}
+                          >
                             <Edit className="h-4 w-4 mr-1" />
                             Edit
                           </Button>
@@ -499,9 +573,12 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
                   </Card>
                 ))}
                 {templates.length === 0 && !loading && (
-                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                  <div className="col-span-full text-center py-12 text-muted-foreground">
                     <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No templates found</p>
+                    <div className="space-y-2">
+                      <p className="font-medium">No templates saved yet</p>
+                      <p className="text-sm">Save successful plans as templates for quick reuse</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -515,6 +592,42 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
         onPlanCreate={loadData}
+        onAdvancedCreate={() => {
+          setShowCreateModal(false);
+          setShowCreatePage(true);
+        }}
+      />
+
+      {/* Template Details Modal */}
+      <TemplateDetailsModal
+        template={selectedTemplate}
+        open={showTemplateDetails}
+        onOpenChange={setShowTemplateDetails}
+      />
+
+      {/* Meal Plan Details Modal */}
+      <MealPlanDetailsModal
+        mealPlan={selectedMealPlan}
+        open={showMealPlanDetails}
+        onOpenChange={setShowMealPlanDetails}
+      />
+
+      {/* Template Editor Modal */}
+      <TemplateEditorModal
+        template={selectedTemplate}
+        open={showTemplateEditor}
+        onOpenChange={setShowTemplateEditor}
+        onSave={handleSaveTemplate}
+        mode={editorMode}
+      />
+
+      {/* Meal Plan Editor Modal */}
+      <MealPlanEditorModal
+        mealPlan={selectedMealPlan}
+        open={showMealPlanEditor}
+        onOpenChange={setShowMealPlanEditor}
+        onSave={handleSaveMealPlan}
+        mode={editorMode}
       />
     </div>
   )

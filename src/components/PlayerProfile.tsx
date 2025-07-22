@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -23,76 +23,76 @@ import {
   FileText,
   Heart,
   Scale,
-  Brain
+  Brain,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
+import { usePlayerService } from '@/hooks/usePlayerService';
+import { useMealPlanService } from '@/hooks/useMealPlanService';
+import { Player, MealPlan } from '@/lib/services/types';
+import SectionErrorBoundary from './SectionErrorBoundary';
+import PlayerProfileSkeleton from './skeletons/PlayerProfileSkeleton';
 
 interface PlayerProfileProps {
   playerId: string | null;
   onBack: () => void;
 }
 
-// Mock player data with detailed information
-const mockPlayerData = {
-  id: 'p1',
-  name: 'Marcus Johnson',
-  position: 'Forward',
-  team: 'Men\'s Soccer',
-  age: 22,
-  height: '6\'2"',
-  weight: '180 lbs',
-  bodyFat: '12%',
-  status: 'active',
-  joinDate: '2024-08-15',
-  avatar: 'MJ',
-  goals: ['Weight gain', 'Performance enhancement'],
-  allergies: ['Shellfish'],
-  dietaryPreferences: ['No restrictions'],
-  medicalConditions: ['None'],
-  currentPlan: {
-    id: 'plan1',
-    name: 'Pre-Season Weight Gain',
-    startDate: '2025-01-08',
-    endDate: '2025-02-08',
-    calories: 3200,
-    protein: 160,
-    carbs: 400,
-    fat: 111,
-    status: 'active'
-  },
-  dailyTargets: {
-    calories: 3200,
-    protein: 160,
-    carbs: 400,
-    fat: 111,
-    water: 3.5
-  },
-  todayProgress: {
-    calories: 2845,
-    protein: 142,
-    carbs: 375,
-    fat: 98,
-    water: 2.8
-  },
-  weeklyCompliance: 87,
-  recentWeight: [
-    { date: '2025-01-06', weight: 178 },
-    { date: '2025-01-08', weight: 179 },
-    { date: '2025-01-10', weight: 179.5 },
-    { date: '2025-01-12', weight: 180 }
-  ],
-  alerts: [
-    { type: 'info', message: 'Consistently meeting protein targets', date: '2025-01-12' },
-    { type: 'warning', message: 'Hydration below target yesterday', date: '2025-01-11' }
-  ],
-  upcomingMeals: [
-    { time: '3:00 PM', meal: 'Post-training snack', calories: 450, status: 'pending' },
-    { time: '7:00 PM', meal: 'Dinner', calories: 850, status: 'pending' },
-    { time: '9:30 PM', meal: 'Evening snack', calories: 300, status: 'pending' }
-  ]
-};
 
 function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [playerData, setPlayerData] = useState<Player | null>(null);
+  const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null);
+  const [playerMealPlans, setPlayerMealPlans] = useState<MealPlan[]>([]);
+  
+  const { getPlayer, loading: playerLoading, error: playerError, clearError: clearPlayerError } = usePlayerService();
+  const { getCurrentMealPlan, getMealPlansByPlayer, loading: mealPlanLoading, error: mealPlanError, clearError: clearMealPlanError } = useMealPlanService();
+  
+  const loading = playerLoading || mealPlanLoading;
+  const error = playerError || mealPlanError;
+  const clearError = () => {
+    clearPlayerError();
+    clearMealPlanError();
+  };
+
+  // Load player data when playerId changes
+  useEffect(() => {
+    if (playerId) {
+      setActiveTab('overview'); // Reset tab when player changes
+      loadPlayerData();
+    }
+  }, [playerId]);
+
+  const loadPlayerData = async () => {
+    if (!playerId) return;
+    
+    clearError();
+    console.log('Loading player data for ID:', playerId);
+    
+    // Load player data and meal plans in parallel
+    const [playerResult, currentPlanResult, mealPlansResult] = await Promise.all([
+      getPlayer(playerId),
+      getCurrentMealPlan(playerId),
+      getMealPlansByPlayer(playerId)
+    ]);
+    
+    if (playerResult) {
+      console.log('Player data loaded:', playerResult);
+      setPlayerData(playerResult);
+    } else {
+      console.log('No player data received');
+    }
+    
+    if (currentPlanResult) {
+      console.log('Current meal plan loaded:', currentPlanResult);
+      setCurrentMealPlan(currentPlanResult);
+    }
+    
+    if (mealPlansResult) {
+      console.log('Player meal plans loaded:', mealPlansResult);
+      setPlayerMealPlans(mealPlansResult);
+    }
+  };
 
   if (!playerId) {
     return (
@@ -102,7 +102,139 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
     );
   }
 
-  const player = mockPlayerData;
+  if (loading) {
+    return <PlayerProfileSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <AlertTriangle className="h-8 w-8 text-destructive" />
+        <p className="text-destructive">Error loading player: {error}</p>
+        <Button onClick={loadPlayerData} variant="outline">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!playerData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Player not found</p>
+      </div>
+    );
+  }
+
+  // Transform real player data to match UI expectations
+  const player = {
+    id: playerData.id,
+    name: playerData.user ? `${playerData.user.first_name} ${playerData.user.last_name}` : 'Unknown',
+    position: playerData.position || 'Not specified',
+    team: playerData.team || 'Not assigned',
+    age: playerData.date_of_birth ? calculateAge(playerData.date_of_birth) : 'Unknown',
+    height: playerData.height ? `${Math.floor(playerData.height / 30.48)}'${Math.round((playerData.height % 30.48) / 2.54)}"` : 'Not recorded',
+    weight: playerData.weight ? `${Math.round(playerData.weight * 2.204)} lbs` : 'Not recorded',
+    bodyFat: 'Not measured', // This would come from additional health data
+    status: playerData.status,
+    joinDate: new Date(playerData.created_at).toLocaleDateString(),
+    avatar: playerData.user ? `${playerData.user.first_name?.[0] || ''}${playerData.user.last_name?.[0] || ''}` : '??',
+    goals: ['Performance optimization'], // Default goals - could come from player preferences
+    allergies: playerData.allergies ? [playerData.allergies] : [],
+    dietaryPreferences: playerData.dietary_restrictions ? [playerData.dietary_restrictions] : ['No restrictions'],
+    medicalConditions: playerData.medical_conditions ? [playerData.medical_conditions] : ['None'],
+    // Real meal plan data from database
+    currentPlan: currentMealPlan ? {
+      id: currentMealPlan.id,
+      name: currentMealPlan.title,
+      startDate: currentMealPlan.start_date || new Date().toISOString().split('T')[0],
+      endDate: currentMealPlan.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      calories: currentMealPlan.calories || 0,
+      protein: currentMealPlan.protein || 0,
+      carbs: currentMealPlan.carbs || 0,
+      fat: currentMealPlan.fat || 0,
+      status: currentMealPlan.status
+    } : null,
+    dailyTargets: {
+      calories: 3200,
+      protein: 160,
+      carbs: 400,
+      fat: 111,
+      water: 3.5
+    },
+    todayProgress: {
+      calories: 0, // No data available yet
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      water: 0
+    },
+    weeklyCompliance: playerData.compliance_rate || 0,
+    recentWeight: playerData.weight ? [
+      { date: new Date(playerData.created_at).toLocaleDateString(), weight: playerData.weight, note: 'Initial weight' }
+    ] : [],
+    alerts: [
+      { 
+        type: 'info', 
+        message: `✅ Real player data loaded from database`, 
+        date: new Date(playerData.updated_at).toLocaleDateString() 
+      },
+      ...(currentMealPlan ? [{
+        type: 'info' as const,
+        message: `🍽️ Active meal plan: "${currentMealPlan.title}"`,
+        date: new Date(currentMealPlan.created_at).toLocaleDateString()
+      }] : [{
+        type: 'warning' as const,
+        message: `📝 No active meal plan assigned`,
+        date: new Date().toLocaleDateString()
+      }]),
+      ...(playerMealPlans.length > 0 ? [{
+        type: 'info' as const,
+        message: `📊 ${playerMealPlans.length} meal plan${playerMealPlans.length > 1 ? 's' : ''} in history`,
+        date: new Date().toLocaleDateString()
+      }] : [{
+        type: 'warning' as const,
+        message: `📊 No meal plan history available`,
+        date: new Date().toLocaleDateString()
+      }])
+    ],
+    upcomingMeals: [], // Meal planning system to be implemented
+    // Additional real data indicators
+    dataSource: {
+      profile: 'database', // Real data
+      nutrition: currentMealPlan ? 'database' : 'none', // Real meal plan data or no data
+      progress: 'placeholder', // Progress tracking not implemented yet
+      plans: playerMealPlans.length > 0 ? 'database' : 'none' // Real meal plan history
+    }
+  };
+
+  // Helper function to calculate age from date of birth
+  function calculateAge(dateOfBirth: string): number | string {
+    try {
+      const today = new Date();
+      const birthDate = new Date(dateOfBirth);
+      
+      // Check if date is valid
+      if (isNaN(birthDate.getTime())) {
+        return 'Invalid date';
+      }
+      
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      // Reasonable age bounds
+      if (age < 0 || age > 150) {
+        return 'Invalid';
+      }
+      
+      return age;
+    } catch (error) {
+      return 'Unknown';
+    }
+  }
 
   const getProgressPercentage = (current: number, target: number) => {
     return Math.min((current / target) * 100, 100);
@@ -117,11 +249,36 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Players
         </Button>
+        <div className="flex items-center gap-2">
+          {playerData && (
+            <>
+              <Badge variant="outline" className="px-3 py-1">
+                ID: {playerData.id}
+              </Badge>
+              <Badge variant="secondary" className="px-3 py-1">
+                ✅ Real Data
+              </Badge>
+            </>
+          )}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={loadPlayerData}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Player Info Header */}
@@ -186,7 +343,11 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
       </Card>
 
       {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <SectionErrorBoundary 
+        title="Player Profile Error"
+        description="Unable to load player profile tabs"
+      >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full" key={playerData?.id}>
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
@@ -325,56 +486,75 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
         <TabsContent value="nutrition" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Current Nutrition Plan</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Current Nutrition Plan
+                <Badge variant="outline" className="text-xs">
+                  {player.currentPlan ? '✅ Active' : '📝 None'}
+                </Badge>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold">{player.currentPlan.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {player.currentPlan.startDate} - {player.currentPlan.endDate}
-                    </p>
+              {player.currentPlan ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold">{player.currentPlan.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {player.currentPlan.startDate} - {player.currentPlan.endDate}
+                      </p>
+                    </div>
+                    <Badge className="bg-blue-100 text-blue-800">
+                      {player.currentPlan.status}
+                    </Badge>
                   </div>
-                  <Badge className="bg-blue-100 text-blue-800">
-                    {player.currentPlan.status}
-                  </Badge>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Daily Calories</p>
-                    <p className="text-xl font-bold">{player.currentPlan.calories}</p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-4 border rounded-lg">
+                      <p className="text-sm text-muted-foreground">Daily Calories</p>
+                      <p className="text-xl font-bold">{player.currentPlan.calories}</p>
+                    </div>
+                    <div className="text-center p-4 border rounded-lg">
+                      <p className="text-sm text-muted-foreground">Protein</p>
+                      <p className="text-xl font-bold">{player.currentPlan.protein}g</p>
+                    </div>
+                    <div className="text-center p-4 border rounded-lg">
+                      <p className="text-sm text-muted-foreground">Carbs</p>
+                      <p className="text-xl font-bold">{player.currentPlan.carbs}g</p>
+                    </div>
+                    <div className="text-center p-4 border rounded-lg">
+                      <p className="text-sm text-muted-foreground">Fat</p>
+                      <p className="text-xl font-bold">{player.currentPlan.fat}g</p>
+                    </div>
                   </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Protein</p>
-                    <p className="text-xl font-bold">{player.currentPlan.protein}g</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Carbs</p>
-                    <p className="text-xl font-bold">{player.currentPlan.carbs}g</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <p className="text-sm text-muted-foreground">Fat</p>
-                    <p className="text-xl font-bold">{player.currentPlan.fat}g</p>
-                  </div>
-                </div>
 
-                <div className="flex gap-2">
-                  <Button>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Modify Plan
-                  </Button>
-                  <Button variant="outline">
-                    <Brain className="h-4 w-4 mr-2" />
-                    AI Suggestions
-                  </Button>
-                  <Button variant="outline">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Export Plan
+                  <div className="flex gap-2">
+                    <Button>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Modify Plan
+                    </Button>
+                    <Button variant="outline">
+                      <Brain className="h-4 w-4 mr-2" />
+                      AI Suggestions
+                    </Button>
+                    <Button variant="outline">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Export Plan
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Utensils className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <div className="space-y-2">
+                    <p className="font-medium">No active nutrition plan</p>
+                    <p className="text-sm text-muted-foreground">Create a personalized plan for this athlete</p>
+                  </div>
+                  <Button className="mt-4">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Plan
                   </Button>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -386,6 +566,7 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
                 Weight Progress
+                <Badge variant="outline" className="text-xs">📊 Limited Data</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -475,7 +656,8 @@ function PlayerProfile({ playerId, onBack }: PlayerProfileProps) {
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </SectionErrorBoundary>
     </div>
   );
 }

@@ -288,9 +288,9 @@ export default function TestMealPlansPage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Meal Plan Service Testing</h1>
+          <h1 className="text-3xl font-bold">Nutrition Planning (Test Mode)</h1>
           <p className="text-muted-foreground">
-            Comprehensive testing for database connectivity and fallback systems
+            Testing resilient database connections with automatic fallback
           </p>
         </div>
         <div className="flex items-center gap-2">

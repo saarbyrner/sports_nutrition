@@ -32,8 +32,8 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useMealPlanService } from '@/hooks/useMealPlanService';
-import { usePlayerService } from '@/hooks/usePlayerService';
-import { Player, CreateMealPlanData } from '@/lib/services/types';
+import { usePlayerSelection } from '@/hooks/useUnifiedPlayer';
+import { CreateMealPlanData } from '@/lib/services/types';
 
 
 const sampleMealPlan = {
@@ -116,24 +116,10 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
   const [specialConsiderations, setSpecialConsiderations] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState(null);
-  const [players, setPlayers] = useState<Player[]>([]);
-
   const { createMealPlan, loading: mealPlanLoading, error: mealPlanError, clearError } = useMealPlanService();
-  const { getPlayers, loading: playersLoading } = usePlayerService();
+  const { players, loading: playersLoading } = usePlayerSelection();
 
-  // Load players when modal opens
-  useEffect(() => {
-    if (open) {
-      loadPlayers();
-    }
-  }, [open]);
-
-  const loadPlayers = async () => {
-    const result = await getPlayers();
-    if (result?.data) {
-      setPlayers(result.data);
-    }
-  };
+  // Players are automatically loaded by usePlayerSelection hook
 
   const handleGeneratePlan = async () => {
     if (!selectedPlayer || !planType || !duration) return;
@@ -236,7 +222,14 @@ function CreatePlanModal({ open, onOpenChange, onPlanCreate }: CreatePlanModalPr
                         key={player.id}
                         value={player.id}
                       >
-                        {player.user ? `${player.user.first_name} ${player.user.last_name}` : 'Unknown Player'}
+                        <div className="flex items-center gap-2">
+                          <span>{player.name}</span>
+                          {player.team && (
+                            <span className="text-xs text-muted-foreground">
+                              - {player.team}
+                            </span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

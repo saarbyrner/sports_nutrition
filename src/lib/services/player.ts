@@ -123,8 +123,19 @@ export class PlayerService extends BaseService {
    */
   async createPlayer(playerData: CreatePlayerData): Promise<ServiceResponse<Player>> {
     try {
+      // Get current authenticated user
+      const { data: { user } } = await this.supabase.auth.getUser()
+      
+      if (!user) {
+        return this.formatError(new Error('User not authenticated'))
+      }
+
+      // For now, we'll trust the authentication system and skip the database lookup
+      // to avoid RLS recursion issues. The RLS policies will enforce admin access.
+      console.log('Creating player with authenticated user:', user.email)
+
       // Start a transaction-like operation
-      // First, create the user
+      // First, create the user with organization context
       const { data: userData, error: userError } = await this.supabase
         .from('users')
         .insert({
@@ -133,12 +144,21 @@ export class PlayerService extends BaseService {
           last_name: playerData.last_name,
           role: 'player',
           phone: playerData.phone,
-          avatar_url: playerData.avatar_url
+          avatar_url: playerData.avatar_url,
+          organization: null // Will be set by admin's organization context via RLS
         })
         .select()
         .single()
 
       if (userError) {
+        console.error('Error creating user for player:', {
+          error: userError,
+          playerData: {
+            email: playerData.email,
+            role: 'player',
+            organization: null
+          }
+        })
         return this.formatError(userError)
       }
 

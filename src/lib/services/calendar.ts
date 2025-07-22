@@ -55,7 +55,7 @@ export class CalendarService extends BaseService {
 
       // Apply filters
       if (options?.filters) {
-        const { start_date, end_date, event_type, attendee_id, search, ...otherFilters } = options.filters
+        const { start_date, end_date, event_type, attendee_id, include_private, search, ...otherFilters } = options.filters
         
         if (start_date) {
           query = query.gte('start_time', start_date)
@@ -67,14 +67,20 @@ export class CalendarService extends BaseService {
           query = query.eq('event_type', event_type)
         }
         if (attendee_id) {
-          query = query.contains('attendee_ids', [attendee_id])
+          query = query.contains('attendees', [attendee_id])
+        }
+        if (include_private === false) {
+          query = query.eq('is_private', false)
         }
         if (search) {
           query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`)
         }
 
-        // Apply other filters
-        Object.entries(otherFilters).forEach(([key, value]) => {
+        // Apply other filters (exclude client-side only filters)
+        const validFilters = { ...otherFilters }
+        delete validFilters.include_private // This is handled above, not a DB column
+        
+        Object.entries(validFilters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
             query = query.eq(key, value)
           }
@@ -109,14 +115,14 @@ export class CalendarService extends BaseService {
       // Fetch attendees for each event
       const eventsWithAttendees = await Promise.all(
         (data || []).map(async (event: CalendarEvent) => {
-          const { data: attendees } = await this.supabase
+          const { data: attendeeUsers } = await this.supabase
             .from('users')
             .select('id, email, first_name, last_name, avatar_url')
-            .in('id', event.attendee_ids || [])
+            .in('id', event.attendees || [])
 
           return {
             ...event,
-            attendees: attendees || []
+            attendee_users: attendeeUsers || []
           } as CalendarEventWithAttendees
         })
       )
@@ -145,14 +151,14 @@ export class CalendarService extends BaseService {
       }
 
       // Fetch attendees
-      const { data: attendees } = await this.supabase
+      const { data: attendeeUsers } = await this.supabase
         .from('users')
         .select('id, email, first_name, last_name, avatar_url')
-        .in('id', data.attendee_ids || [])
+        .in('id', data.attendees || [])
 
       const eventWithAttendees = {
         ...data,
-        attendees: attendees || []
+        attendee_users: attendeeUsers || []
       } as CalendarEventWithAttendees
 
       return this.formatResponse(eventWithAttendees)
@@ -286,7 +292,7 @@ export class CalendarService extends BaseService {
       let baseQuery = this.supabase.from('calendar_events')
       
       if (userId) {
-        baseQuery = baseQuery.contains('attendee_ids', [userId])
+        baseQuery = baseQuery.contains('attendees', [userId])
       }
 
       const [totalRes, weekRes, monthRes, upcomingRes, typeRes] = await Promise.all([

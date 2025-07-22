@@ -50,9 +50,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setAuthService(service)
         
-        // Initialize auth state
+        // Initialize auth state with timeout
         try {
-          const user = await service.getCurrentUser()
+          const userPromise = service.getCurrentUser()
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Authentication timeout')), 5000)
+          )
+          
+          const user = await Promise.race([userPromise, timeoutPromise]) as any
           if (!mounted) return
 
           setAuthState({
@@ -63,10 +68,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         } catch (error) {
           if (!mounted) return
 
+          console.warn('Auth initialization failed:', error)
           setAuthState({
             user: null,
             loading: false,
-            error: error instanceof Error ? error.message : 'Authentication failed'
+            error: null // Don't show error for initial load, just set to not authenticated
           })
         }
 

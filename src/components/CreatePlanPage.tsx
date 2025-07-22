@@ -65,14 +65,9 @@ import {
 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 
-// Mock data for players
-const mockPlayers = [
-  { id: "p1", name: "Marcus Johnson", avatar: "MJ", team: "Men's Soccer" },
-  { id: "p2", name: "Sarah Williams", avatar: "SW", team: "Women's Soccer" },
-  { id: "p3", name: "David Chen", avatar: "DC", team: "Men's Basketball" },
-  { id: "p4", name: "Emily Rodriguez", avatar: "ER", team: "Women's Soccer" },
-  { id: "p5", name: "Alex Thompson", avatar: "AT", team: "Men's Soccer" },
-];
+import { usePlayerSelection } from '@/hooks/useUnifiedPlayer';
+import { SimplePlayerSelector } from './shared/PlayerSelector';
+import { NutritionCards } from './shared/NutritionSummary';
 
 const sampleMealPlan = {
   breakfast: {
@@ -175,7 +170,8 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
   const [templateSearchTerm, setTemplateSearchTerm] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
-  const selectedPlayerData = mockPlayers.find(p => p.id === selectedPlayer);
+  const { players } = usePlayerSelection();
+  const selectedPlayerData = players.find(p => p.id === selectedPlayer);
 
   const filteredTemplates = templates.filter(template => 
     template.name.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
@@ -378,15 +374,15 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={onBack} size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Meal Plans
+            Back to Plans
           </Button>
           <div className="h-6 w-px bg-border" />
           <div>
-            <h1 className="text-2xl font-semibold">Create Meal Plan</h1>
+            <h1 className="text-2xl font-semibold">Create Nutrition Plan</h1>
             <p className="text-muted-foreground">
-              {planMode === 'ai' ? 'Use AI to generate a personalized meal plan' : 
+              {planMode === 'ai' ? 'Use AI to generate a personalized nutrition plan' : 
                planMode === 'template' ? 'Start with a template and customize' : 
-               'Create a custom meal plan manually'}
+               'Create a custom nutrition plan manually'}
             </p>
           </div>
         </div>
@@ -438,7 +434,7 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
           <TabsTrigger value="plan" disabled={!mealPlan}>
             <div className="flex items-center gap-2">
               <Utensils className="w-4 h-4" />
-              Meal Plan
+              Plan Details
             </div>
           </TabsTrigger>
           <TabsTrigger value="review" disabled={!mealPlan}>
@@ -511,26 +507,11 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
 
                 <div className="space-y-3">
                   <label className="text-sm font-medium">Select Player *</label>
-                  <Select
+                  <SimplePlayerSelector
                     value={selectedPlayer}
                     onValueChange={setSelectedPlayer}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a player" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mockPlayers.map((player) => (
-                        <SelectItem key={player.id} value={player.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{player.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              - {player.team}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Choose a player"
+                  />
                 </div>
 
                 <div className="space-y-3">
@@ -749,26 +730,10 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-3 gap-6 text-center">
-                    <div>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {getTotalNutrients().protein}g
-                      </p>
-                      <p className="text-sm text-muted-foreground">Protein</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-green-600">
-                        {getTotalNutrients().carbs}g
-                      </p>
-                      <p className="text-sm text-muted-foreground">Carbs</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-orange-600">
-                        {getTotalNutrients().fat}g
-                      </p>
-                      <p className="text-sm text-muted-foreground">Fat</p>
-                    </div>
-                  </div>
+                  <NutritionCards 
+                    data={getTotalNutrients()} 
+                    showProgress={false}
+                  />
                 </CardContent>
               </Card>
 

@@ -86,6 +86,25 @@ export function useMealPlanService() {
     }
   }, [handleError])
 
+  const getCurrentMealPlan = useCallback(async (playerId: string) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const result = await mealPlanService.getCurrentMealPlan(playerId)
+      if (!result.success) {
+        handleError(result.error)
+        return null
+      }
+      return result.data
+    } catch (err) {
+      handleError(err)
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }, [handleError])
+
   const createMealPlan = useCallback(async (mealPlanData: CreateMealPlanData) => {
     setLoading(true)
     setError(null)
@@ -319,6 +338,7 @@ export function useMealPlanService() {
     getMealPlans,
     getMealPlan,
     getMealPlansByPlayer,
+    getCurrentMealPlan,
     createMealPlan,
     updateMealPlan,
     deleteMealPlan,

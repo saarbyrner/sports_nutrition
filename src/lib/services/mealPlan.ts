@@ -1,5 +1,6 @@
 import { BaseService, ServiceResponse, PaginationOptions, SortOptions, FilterOptions } from './base'
 import { MealPlan, CreateMealPlanData, UpdateMealPlanData, Template, CreateTemplateData, UpdateTemplateData } from './types'
+import { unifiedPlayerService, PlayerSummary } from './unifiedPlayer'
 
 export class MealPlanService extends BaseService {
   /**
@@ -88,13 +89,21 @@ export class MealPlanService extends BaseService {
   }
 
   /**
-   * Get meal plans for a specific player
+   * Get meal plans for a specific player with enhanced player data
    */
   async getMealPlansByPlayer(playerId: string): Promise<ServiceResponse<MealPlan[]>> {
     try {
       const { data, error } = await this.supabase
         .from('meal_plans')
-        .select('*')
+        .select(`
+          *,
+          created_by_user:users!created_by (
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
         .eq('player_id', playerId)
         .order('created_at', { ascending: false })
 
@@ -102,7 +111,97 @@ export class MealPlanService extends BaseService {
         return this.formatError(error)
       }
 
+      // Enhance with player data from unified service
+      const playerResult = await unifiedPlayerService.getPlayerSummary(playerId)
+      if (playerResult.success) {
+        const playerInfo = playerResult.data
+        data.forEach(plan => {
+          plan.player = {
+            id: playerInfo.id,
+            user_id: '', // Will be populated if needed
+            status: playerInfo.status as any,
+            compliance_rate: 0,
+            tags: [],
+            created_at: '',
+            updated_at: '',
+            team: playerInfo.team,
+            sport: playerInfo.sport,
+            user: {
+              id: '',
+              email: playerInfo.email,
+              first_name: playerInfo.name.split(' ')[0] || '',
+              last_name: playerInfo.name.split(' ').slice(1).join(' ') || '',
+              role: 'player' as any,
+              created_at: '',
+              updated_at: ''
+            }
+          }
+        })
+      }
+
       return this.formatResponse(data as MealPlan[])
+    } catch (error) {
+      return this.formatError(error)
+    }
+  }
+
+  /**
+   * Get current active meal plan for a player
+   */
+  async getCurrentMealPlan(playerId: string): Promise<ServiceResponse<MealPlan | null>> {
+    try {
+      const { data, error } = await this.supabase
+        .from('meal_plans')
+        .select(`
+          *,
+          created_by_user:users!created_by (
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .eq('player_id', playerId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (error) {
+        return this.formatError(error)
+      }
+
+      if (!data) {
+        return this.formatResponse(null)
+      }
+
+      // Enhance with player data from unified service
+      const playerResult = await unifiedPlayerService.getPlayerSummary(playerId)
+      if (playerResult.success) {
+        const playerInfo = playerResult.data
+        data.player = {
+          id: playerInfo.id,
+          user_id: '',
+          status: playerInfo.status as any,
+          compliance_rate: 0,
+          tags: [],
+          created_at: '',
+          updated_at: '',
+          team: playerInfo.team,
+          sport: playerInfo.sport,
+          user: {
+            id: '',
+            email: playerInfo.email,
+            first_name: playerInfo.name.split(' ')[0] || '',
+            last_name: playerInfo.name.split(' ').slice(1).join(' ') || '',
+            role: 'player' as any,
+            created_at: '',
+            updated_at: ''
+          }
+        }
+      }
+
+      return this.formatResponse(data as MealPlan)
     } catch (error) {
       return this.formatError(error)
     }

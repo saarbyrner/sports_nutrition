@@ -41,8 +41,7 @@ import {
   Users,
   User,
   Utensils,
-  Activity,
-  Target,
+  UserCheck,
   AlertTriangle,
   Search,
   ChevronLeft,
@@ -63,30 +62,15 @@ const localizer = momentLocalizer(moment);
 
 // Event types with colors
 const eventTypes = {
-  training: {
-    label: "Training Session",
-    color: "#3b82f6",
-    icon: Activity,
-  },
-  meal: {
-    label: "Meal Planning",
+  meal_plan: {
+    label: "Meal Plan",
     color: "#10b981",
     icon: Utensils,
   },
-  competition: {
-    label: "Competition",
-    color: "#ef4444",
-    icon: Target,
-  },
-  recovery: {
-    label: "Recovery Session",
-    color: "#06b6d4",
-    icon: Activity,
-  },
-  meeting: {
-    label: "Team Meeting",
-    color: "#8b5cf6",
-    icon: Users,
+  appointment: {
+    label: "Appointment",
+    color: "#3b82f6",
+    icon: UserCheck,
   },
 };
 
@@ -165,6 +149,8 @@ function NutritionCalendarReal({
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventWithAttendees | null>(null);
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<Partial<CreateCalendarEventData> | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<EventType | "all">("all");
   const [view, setView] = useState(Views.MONTH);
@@ -175,6 +161,7 @@ function NutritionCalendarReal({
     error: calendarError,
     getEvents,
     createEvent,
+    updateEvent,
     deleteEvent,
     clearError
   } = useCalendarService()
@@ -186,12 +173,13 @@ function NutritionCalendarReal({
 
   const [newEvent, setNewEvent] = useState<Partial<CreateCalendarEventData>>({
     title: "",
-    event_type: "meal",
+    event_type: "meal_plan",
     start_time: new Date().toISOString(),
     end_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour later
     location: "",
     description: "",
-    attendee_ids: [],
+    attendees: [],
+    is_private: false,
   });
 
   // Load data
@@ -285,7 +273,8 @@ function NutritionCalendarReal({
       start_time: newEvent.start_time,
       end_time: newEvent.end_time,
       location: newEvent.location || '',
-      attendee_ids: newEvent.attendee_ids || [],
+      attendees: newEvent.attendees || [],
+      is_private: false,
       metadata: {}
     }
 
@@ -294,13 +283,54 @@ function NutritionCalendarReal({
       setShowCreateDialog(false)
       setNewEvent({
         title: "",
-        event_type: "meal",
+        event_type: "meal_plan",
         start_time: new Date().toISOString(),
         end_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         location: "",
         description: "",
-        attendee_ids: [],
+        attendees: [],
+        is_private: false,
       })
+      await loadData() // Refresh events
+    }
+  }
+
+  const handleEditEvent = (event: CalendarEventWithAttendees) => {
+    setEditingEvent({
+      title: event.title,
+      description: event.description || '',
+      event_type: event.event_type,
+      start_time: event.start_time,
+      end_time: event.end_time,
+      location: event.location || '',
+      attendees: event.attendees || [],
+      is_private: event.is_private || false,
+    })
+    setShowEventDialog(false)
+    setShowEditDialog(true)
+  }
+
+  const handleUpdateEvent = async () => {
+    if (!selectedEvent || !editingEvent?.title || !editingEvent?.start_time || !editingEvent?.end_time || !editingEvent?.event_type) {
+      return
+    }
+
+    const eventData = {
+      title: editingEvent.title,
+      description: editingEvent.description,
+      event_type: editingEvent.event_type as EventType,
+      start_time: editingEvent.start_time,
+      end_time: editingEvent.end_time,
+      location: editingEvent.location || '',
+      attendees: editingEvent.attendees || [],
+      is_private: editingEvent.is_private || false,
+      metadata: {}
+    }
+
+    const updated = await updateEvent(selectedEvent.id, eventData)
+    if (updated) {
+      setShowEditDialog(false)
+      setEditingEvent(null)
       await loadData() // Refresh events
     }
   }
@@ -370,14 +400,6 @@ function NutritionCalendarReal({
         </div>
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={loadData}
-            disabled={calendarLoading || playersLoading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${(calendarLoading || playersLoading) ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Create Event
@@ -497,14 +519,14 @@ function NutritionCalendarReal({
                   </div>
                 )}
 
-                {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
+                {selectedEvent.attendee_users && selectedEvent.attendee_users.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <Users className="w-5 h-5 text-muted-foreground" />
                       <p className="font-medium">Attendees</p>
                     </div>
                     <div className="ml-8 space-y-1">
-                      {selectedEvent.attendees.map(attendee => (
+                      {selectedEvent.attendee_users.map(attendee => (
                         <div key={attendee.id} className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
                             <AvatarFallback className="text-xs">
@@ -531,7 +553,12 @@ function NutritionCalendarReal({
               </div>
 
               <div className="flex gap-3 pt-4 border-t">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => handleEditEvent(selectedEvent)}
+                >
                   <Edit className="w-4 w-4 mr-2" />
                   Edit
                 </Button>
@@ -602,12 +629,15 @@ function NutritionCalendarReal({
                 <Input
                   type="datetime-local"
                   value={newEvent.start_time ? moment(newEvent.start_time).format("YYYY-MM-DDTHH:mm") : ''}
-                  onChange={(e) =>
-                    setNewEvent({
-                      ...newEvent,
-                      start_time: new Date(e.target.value).toISOString(),
-                    })
-                  }
+                  onChange={(e) => {
+                    const dateValue = e.target.value
+                    if (dateValue) {
+                      setNewEvent({
+                        ...newEvent,
+                        start_time: new Date(dateValue).toISOString(),
+                      })
+                    }
+                  }}
                 />
               </div>
               <div className="space-y-3">
@@ -615,12 +645,15 @@ function NutritionCalendarReal({
                 <Input
                   type="datetime-local"
                   value={newEvent.end_time ? moment(newEvent.end_time).format("YYYY-MM-DDTHH:mm") : ''}
-                  onChange={(e) =>
-                    setNewEvent({
-                      ...newEvent,
-                      end_time: new Date(e.target.value).toISOString(),
-                    })
-                  }
+                  onChange={(e) => {
+                    const dateValue = e.target.value
+                    if (dateValue) {
+                      setNewEvent({
+                        ...newEvent,
+                        end_time: new Date(dateValue).toISOString(),
+                      })
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -676,6 +709,146 @@ function NutritionCalendarReal({
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg">Edit Event</DialogTitle>
+            <DialogDescription>
+              Update your event details
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingEvent && (
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Event Title *</label>
+                <Input
+                  placeholder="Enter event title..."
+                  value={editingEvent.title || ''}
+                  onChange={(e) =>
+                    setEditingEvent({
+                      ...editingEvent,
+                      title: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Event Type *</label>
+                <Select
+                  value={editingEvent.event_type}
+                  onValueChange={(value: EventType) =>
+                    setEditingEvent({ ...editingEvent, event_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(eventTypes).map(([key, type]) => (
+                      <SelectItem key={key} value={key}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">Start Time *</label>
+                  <Input
+                    type="datetime-local"
+                    value={editingEvent.start_time ? moment(editingEvent.start_time).format("YYYY-MM-DDTHH:mm") : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value
+                      if (dateValue) {
+                        setEditingEvent({
+                          ...editingEvent,
+                          start_time: new Date(dateValue).toISOString(),
+                        })
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-sm font-medium">End Time *</label>
+                  <Input
+                    type="datetime-local"
+                    value={editingEvent.end_time ? moment(editingEvent.end_time).format("YYYY-MM-DDTHH:mm") : ''}
+                    onChange={(e) => {
+                      const dateValue = e.target.value
+                      if (dateValue) {
+                        setEditingEvent({
+                          ...editingEvent,
+                          end_time: new Date(dateValue).toISOString(),
+                        })
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Location</label>
+                <Input
+                  placeholder="Enter location..."
+                  value={editingEvent.location || ''}
+                  onChange={(e) =>
+                    setEditingEvent({
+                      ...editingEvent,
+                      location: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  placeholder="Enter event description..."
+                  value={editingEvent.description || ''}
+                  onChange={(e) =>
+                    setEditingEvent({
+                      ...editingEvent,
+                      description: e.target.value,
+                    })
+                  }
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowEditDialog(false)
+                    setEditingEvent(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleUpdateEvent}
+                  disabled={!editingEvent.title || calendarLoading}
+                >
+                  {calendarLoading ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Edit className="w-4 h-4 mr-2" />
+                  )}
+                  Update Event
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

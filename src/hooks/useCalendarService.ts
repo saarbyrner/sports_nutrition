@@ -75,31 +75,38 @@ export function useCalendarService() {
     }
   }, [handleError])
 
-  // Create event
+  // Create event - require proper authentication
   const createEvent = useCallback(async (eventData: CreateCalendarEventData) => {
     if (!user?.id) {
-      setError('User not authenticated')
+      setError('Please log in to create calendar events')
       return null
     }
+
+    // Get user's organization for proper data isolation
+    const userOrganization = (user as any)?.organization || 'Sports Nutrition'
 
     setLoading(true)
     setError(null)
     
     try {
-      const result = await calendarService.createEvent(eventData, user.id)
+      console.log('Creating event with user:', user.id, 'org:', userOrganization)
+      const result = await calendarService.createEvent(eventData, user.id, userOrganization)
       
       if (!result.success) {
+        console.error('Event creation failed:', result.error)
         handleError(result.error)
         return null
       }
+      console.log('Event created successfully:', result.data)
       return result.data
     } catch (err) {
+      console.error('Event creation exception:', err)
       handleError(err)
       return null
     } finally {
       setLoading(false)
     }
-  }, [handleError, user?.id])
+  }, [handleError, user])
 
   // Update event
   const updateEvent = useCallback(async (id: string, eventData: UpdateCalendarEventData) => {
