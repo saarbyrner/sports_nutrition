@@ -61,13 +61,15 @@ import {
   Calendar as CalendarIcon,
   BookOpen,
   Tag,
-  Search
+  Search,
+  AlertTriangle
 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 
 import { usePlayerSelection } from '@/hooks/useUnifiedPlayer';
-import { SimplePlayerSelector } from './shared/PlayerSelector';
-import { NutritionCards } from './shared/NutritionSummary';
+import { useUnifiedMealPlan } from '@/hooks/useUnifiedMealPlan';
+import { PlayerSelector } from './shared/PlayerSelector';
+import { NutritionSummary } from './shared/NutritionSummary';
 
 const sampleMealPlan = {
   breakfast: {
@@ -149,17 +151,20 @@ const sampleMealPlan = {
 interface CreatePlanPageProps {
   onBack: () => void;
   onPlanCreate: (planData: any) => void;
-  templates: any[];
+  templates?: any[];
 }
 
-function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps) {
+function CreatePlanPage({ onBack, onPlanCreate, templates = [] }: CreatePlanPageProps) {
   const [activeTab, setActiveTab] = useState("setup");
-  const [planMode, setPlanMode] = useState<"ai" | "manual" | "template">("ai");
+  const [currentStep, setCurrentStep] = useState(1); // Step-by-step flow: 1=Player, 2=Type+Duration, 3=Mode, 4=Generate
+  const [planMode, setPlanMode] = useState<"ai" | "manual" | "template">("ai"); // Smart default: AI-first approach
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const [planType, setPlanType] = useState("");
-  const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>({
-    from: undefined,
-    to: undefined
+  const [dateRange, setDateRange] = useState<{from: Date | undefined, to: Date | undefined}>(() => {
+    // Smart default: 2-week plan starting today
+    const today = new Date();
+    const twoWeeksFromNow = addDays(today, 13); // 14 days total (0-13)
+    return { from: today, to: twoWeeksFromNow };
   });
   const [planName, setPlanName] = useState("");
   const [specialConsiderations, setSpecialConsiderations] = useState("");
@@ -171,12 +176,18 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   const { players } = usePlayerSelection();
+  const { 
+    loading: mealPlanLoading, 
+    error: mealPlanError, 
+    usingMockData,
+    createMealPlan 
+  } = useUnifiedMealPlan();
   const selectedPlayerData = players.find(p => p.id === selectedPlayer);
 
-  const filteredTemplates = templates.filter(template => 
-    template.name.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
-    template.description.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
-    template.category.toLowerCase().includes(templateSearchTerm.toLowerCase())
+  const filteredTemplates = (templates || []).filter(template => 
+    template?.name?.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+    template?.description?.toLowerCase().includes(templateSearchTerm.toLowerCase()) ||
+    template?.category?.toLowerCase().includes(templateSearchTerm.toLowerCase())
   );
 
   // Calculate duration from date range
@@ -365,7 +376,11 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
     setHasUnsavedChanges(false);
   };
 
-  const canProceed = selectedPlayer && planType && dateRange.from && dateRange.to && (planName || planType);
+  // Progressive validation based on current step
+  const canProceedStep1 = selectedPlayer;
+  const canProceedStep2 = selectedPlayer && planType && dateRange.from && dateRange.to;
+  const canProceedStep3 = canProceedStep2 && planMode;
+  const canProceed = canProceedStep3;
 
   return (
     <div className="space-y-6">
@@ -383,6 +398,7 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
               {planMode === 'ai' ? 'Use AI to generate a personalized nutrition plan' : 
                planMode === 'template' ? 'Start with a template and customize' : 
                'Create a custom nutrition plan manually'}
+              {usingMockData && <Badge variant="outline" className="ml-2">Demo Mode</Badge>}
             </p>
           </div>
         </div>
@@ -414,7 +430,7 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-              <Button onClick={handleSavePlan} disabled={!canProceed}>
+              <Button onClick={handleSavePlan} disabled={!canProceed || mealPlanLoading}>
                 <Save className="w-4 h-4 mr-2" />
                 Save & Publish Plan
               </Button>
@@ -445,138 +461,189 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
           </TabsTrigger>
         </TabsList>
 
-        {/* Setup Tab */}
+        {/* Setup Tab - Progressive Disclosure */}
         <TabsContent value="setup" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Plan Mode Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Choose Creation Method</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    variant={planMode === 'ai' ? 'default' : 'outline'}
-                    onClick={() => setPlanMode('ai')}
-                    className="h-20 flex-col gap-2"
-                  >
-                    <Brain className="w-6 h-6" />
-                    <span className="text-sm">AI Generated</span>
-                  </Button>
-                  <Button
-                    variant={planMode === 'template' ? 'default' : 'outline'}
-                    onClick={() => setPlanMode('template')}
-                    className="h-20 flex-col gap-2"
-                  >
-                    <BookOpen className="w-6 h-6" />
-                    <span className="text-sm">From Template</span>
-                  </Button>
-                  <Button
-                    variant={planMode === 'manual' ? 'default' : 'outline'}
-                    onClick={() => setPlanMode('manual')}
-                    className="h-20 flex-col gap-2"
-                  >
-                    <User className="w-6 h-6" />
-                    <span className="text-sm">Manual Creation</span>
-                  </Button>
+          {/* Progress Indicator */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      currentStep >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      1
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">Player</div>
+                      <div className="text-xs text-muted-foreground">Who is this for?</div>
+                    </div>
+                  </div>
+                  <div className={`w-8 h-0.5 ${currentStep > 1 ? 'bg-primary' : 'bg-muted'}`} />
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      currentStep >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      2
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">Plan Details</div>
+                      <div className="text-xs text-muted-foreground">Type & duration</div>
+                    </div>
+                  </div>
+                  <div className={`w-8 h-0.5 ${currentStep > 2 ? 'bg-primary' : 'bg-muted'}`} />
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      currentStep >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      3
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">Method</div>
+                      <div className="text-xs text-muted-foreground">How to create</div>
+                    </div>
+                  </div>
+                  <div className={`w-8 h-0.5 ${currentStep > 3 ? 'bg-primary' : 'bg-muted'}`} />
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      currentStep >= 4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      4
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">Generate</div>
+                      <div className="text-xs text-muted-foreground">Create the plan</div>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {planMode === 'ai' 
-                    ? 'AI will generate a personalized meal plan based on the player\'s profile and your specifications.' 
-                    : planMode === 'template'
-                    ? 'Start with a pre-built template and customize it for the specific athlete.'
-                    : 'Create a meal plan from scratch with full control over every meal and ingredient.'}
-                </p>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Plan Configuration */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Plan Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Plan Name</label>
-                  <Input
-                    placeholder="Enter plan name..."
-                    value={planName}
-                    onChange={(e) => setPlanName(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Select Player *</label>
-                  <SimplePlayerSelector
+          {/* Step Content */}
+          <div className="max-w-2xl mx-auto">
+            {currentStep === 1 && (
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <User className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <CardTitle>Select Player</CardTitle>
+                  <p className="text-muted-foreground">Choose the athlete for this nutrition plan</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <PlayerSelector
                     value={selectedPlayer}
-                    onValueChange={setSelectedPlayer}
-                    placeholder="Choose a player"
+                    onPlayerSelect={setSelectedPlayer}
+                    placeholder="Search and select a player..."
+                    variant="advanced"
+                    showTeamFilter={true}
+                    className="min-h-[60px]"
                   />
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Plan Type *</label>
-                  <Select value={planType} onValueChange={setPlanType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select plan type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="weight_gain">Weight Gain</SelectItem>
-                      <SelectItem value="weight_loss">Weight Loss</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                      <SelectItem value="competition_prep">Competition Prep</SelectItem>
-                      <SelectItem value="recovery">Recovery</SelectItem>
-                      <SelectItem value="endurance">Endurance</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Plan Duration *</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {getDateRangeDisplay()}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <div className="p-3 border-b">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-sm">Select Date Range</h4>
-                          {dateRange.from && dateRange.to && (
-                            <Badge variant="outline" className="text-xs">
-                              {getDurationString()}
-                            </Badge>
-                          )}
+                  {selectedPlayerData && (
+                    <div className="bg-muted/50 rounded-lg p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                          <User className="w-6 h-6 text-primary" />
                         </div>
-                        <div className="flex gap-2 mb-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setQuickRange(7)}
-                            className="text-xs"
-                          >
-                            1 Week
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setQuickRange(14)}
-                            className="text-xs"
-                          >
-                            2 Weeks
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setQuickRange(30)}
-                            className="text-xs"
-                          >
-                            1 Month
+                        <div>
+                          <div className="font-medium">{selectedPlayerData.user?.first_name} {selectedPlayerData.user?.last_name}</div>
+                          <div className="text-sm text-muted-foreground">{selectedPlayerData.position} • {selectedPlayerData.team || 'No team'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {currentStep === 2 && (
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target className="w-8 h-8 text-green-600" />
+                  </div>
+                  <CardTitle>Plan Details</CardTitle>
+                  <p className="text-muted-foreground">Set the type and duration of the nutrition plan</p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Plan Name (Optional)</label>
+                    <Input
+                      placeholder="Enter a custom plan name..."
+                      value={planName}
+                      onChange={(e) => setPlanName(e.target.value)}
+                      className="text-center"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Plan Type</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'weight_gain', label: 'Weight Gain', icon: Target },
+                        { value: 'weight_loss', label: 'Weight Loss', icon: Target },
+                        { value: 'maintenance', label: 'Maintenance', icon: Target },
+                        { value: 'competition_prep', label: 'Competition Prep', icon: Target },
+                        { value: 'recovery', label: 'Recovery', icon: Target },
+                        { value: 'endurance', label: 'Endurance', icon: Target }
+                      ].map(({ value, label, icon: Icon }) => (
+                        <Button
+                          key={value}
+                          variant={planType === value ? "default" : "outline"}
+                          onClick={() => setPlanType(value)}
+                          className="h-16 flex-col gap-1"
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span className="text-sm">{label}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Duration</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-center text-center font-normal h-16"
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <CalendarIcon className="w-5 h-5" />
+                            <div className="text-sm">{getDateRangeDisplay()}</div>
+                            {getDurationString() && (
+                              <div className="text-xs text-muted-foreground">{getDurationString()}</div>
+                            )}
+                          </div>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="center">
+                        <div className="p-3 border-b">
+                          <div className="flex gap-2 mb-3">
+                            <Button
+                              variant={getDurationString() === "1 week" ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setQuickRange(7)}
+                              className="text-xs flex-1"
+                            >
+                              1 Week
+                            </Button>
+                            <Button
+                              variant={getDurationString() === "2 weeks" ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setQuickRange(14)}
+                              className="text-xs flex-1"
+                            >
+                              2 Weeks
+                            </Button>
+                            <Button
+                              variant={getDurationString() === "4 weeks" ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setQuickRange(30)}
+                              className="text-xs flex-1"
+                            >
+                              1 Month
                           </Button>
                         </div>
                       </div>
@@ -584,105 +651,226 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
                         mode="range"
                         selected={dateRange}
                         onSelect={(range) => setDateRange(range || {from: undefined, to: undefined})}
-                        numberOfMonths={2}
+                        numberOfMonths={1}
                         disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        className="rounded-md"
                       />
                     </PopoverContent>
                   </Popover>
                   {dateRange.from && dateRange.to && (
-                    <div className="text-sm text-muted-foreground">
-                      Plan duration: {getDurationString()} 
-                      <span className="text-xs ml-2">
-                        ({format(dateRange.from, "MMM dd")} to {format(dateRange.to, "MMM dd, yyyy")})
-                      </span>
+                    <div className="text-sm text-muted-foreground text-center">
+                      Plan duration: <span className="font-medium">{getDurationString()}</span>
+                      <div className="text-xs">
+                        {format(dateRange.from, "MMM dd")} to {format(dateRange.to, "MMM dd, yyyy")}
+                      </div>
                     </div>
                   )}
                 </div>
+                </CardContent>
+              </Card>
+            )}
 
-                {planMode === 'template' && (
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium">Template</label>
+            {currentStep === 3 && (
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Brain className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <CardTitle>Choose Creation Method</CardTitle>
+                  <p className="text-muted-foreground">How would you like to create this nutrition plan?</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <Button
-                      variant="outline"
-                      onClick={() => setShowTemplateSelector(true)}
-                      className="w-full justify-start"
+                      variant={planMode === 'ai' ? 'default' : 'outline'}
+                      onClick={() => setPlanMode('ai')}
+                      className="h-20 flex items-center gap-4 relative p-6"
                     >
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      {selectedTemplate ? selectedTemplate.name : 'Choose Template'}
+                      <Badge className="absolute top-2 right-2 text-xs bg-green-500 hover:bg-green-600">
+                        Recommended
+                      </Badge>
+                      <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                        <Brain className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium">AI Generated</div>
+                        <div className="text-sm text-muted-foreground">Let AI create a personalized plan based on the player's profile</div>
+                      </div>
                     </Button>
+                    <Button
+                      variant={planMode === 'template' ? 'default' : 'outline'}
+                      onClick={() => setPlanMode('template')}
+                      className="h-20 flex items-center gap-4 p-6"
+                    >
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <BookOpen className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium">From Template</div>
+                        <div className="text-sm text-muted-foreground">Start with a pre-built template and customize it</div>
+                      </div>
+                    </Button>
+                    <Button
+                      variant={planMode === 'manual' ? 'default' : 'outline'}
+                      onClick={() => setPlanMode('manual')}
+                      className="h-20 flex items-center gap-4 p-6"
+                    >
+                      <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-orange-600" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium">Manual Creation</div>
+                        <div className="text-sm text-muted-foreground">Create a meal plan from scratch with full control</div>
+                      </div>
+                    </Button>
+                  </div>
+
+                  {planMode === 'template' && (
+                    <div className="space-y-3 pt-4 border-t">
+                      <label className="text-sm font-medium">Select Template</label>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowTemplateSelector(true)}
+                        className="w-full justify-start h-16"
+                      >
+                        <BookOpen className="w-4 h-4 mr-3" />
+                        <div className="flex-1 text-left">
+                          {selectedTemplate ? (
+                            <div>
+                              <div className="font-medium">{selectedTemplate.name}</div>
+                              <div className="text-xs text-muted-foreground">{selectedTemplate.calories} cal • {selectedTemplate.category}</div>
+                            </div>
+                          ) : (
+                            <div>Choose a template...</div>
+                          )}
+                        </div>
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {currentStep === 4 && (
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-8 h-8 text-green-600" />
+                  </div>
+                  <CardTitle>Ready to Generate</CardTitle>
+                  <p className="text-muted-foreground">Review your selections and create the nutrition plan</p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Player:</span>
+                      <span className="text-sm">{selectedPlayerData?.user?.first_name} {selectedPlayerData?.user?.last_name}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Plan Type:</span>
+                      <span className="text-sm">{planType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Duration:</span>
+                      <span className="text-sm">{getDurationString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Method:</span>
+                      <span className="text-sm">
+                        {planMode === 'ai' ? 'AI Generated' : planMode === 'template' ? 'Template-based' : 'Manual Creation'}
+                      </span>
+                    </div>
                     {selectedTemplate && (
-                      <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded">
-                        <p className="font-medium">{selectedTemplate.name}</p>
-                        <p>{selectedTemplate.description}</p>
-                        <p className="mt-1">
-                          <Badge variant="outline" className="text-xs">
-                            {selectedTemplate.category}
-                          </Badge>
-                          <span className="ml-2">{selectedTemplate.calories} calories</span>
-                        </p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Template:</span>
+                        <span className="text-sm">{selectedTemplate.name}</span>
                       </div>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Special Considerations (Optional)</label>
+                    <Textarea
+                      value={specialConsiderations}
+                      onChange={(e) => setSpecialConsiderations(e.target.value)}
+                      placeholder="Any special considerations, dietary restrictions, or notes..."
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </div>
+
+                  <div className="pt-4">
+                    {planMode === 'ai' ? (
+                      <Button
+                        onClick={handleGenerateAIPlan}
+                        disabled={!canProceed || isGenerating}
+                        className="w-full h-12"
+                        size="lg"
+                      >
+                        {isGenerating ? (
+                          <>
+                            <Sparkles className="w-5 h-5 mr-2 animate-spin" />
+                            Generating AI Plan...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-5 h-5 mr-2" />
+                            Generate AI Plan
+                          </>
+                        )}
+                      </Button>
+                    ) : planMode === 'template' ? (
+                      <Button
+                        onClick={() => selectedTemplate && handleUseTemplate(selectedTemplate)}
+                        disabled={!canProceed || !selectedTemplate}
+                        className="w-full h-12"
+                        size="lg"
+                      >
+                        <Copy className="w-5 h-5 mr-2" />
+                        Create from Template
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleCreateManualPlan}
+                        disabled={!canProceed}
+                        className="w-full h-12"
+                        size="lg"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        Create Manual Plan
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Special Considerations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Special Considerations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={specialConsiderations}
-                onChange={(e) => setSpecialConsiderations(e.target.value)}
-                placeholder="Enter any special considerations, dietary restrictions, training schedule notes, or preferences..."
-                rows={4}
-                className="resize-none"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-4">
-            {planMode === 'ai' ? (
-              <Button
-                onClick={handleGenerateAIPlan}
-                disabled={!canProceed || isGenerating}
-                size="lg"
-              >
-                {isGenerating ? (
-                  <>
-                    <Sparkles className="w-5 h-5 mr-2 animate-spin" />
-                    Generating Plan...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="w-5 h-5 mr-2" />
-                    Generate AI Plan
-                  </>
-                )}
-              </Button>
-            ) : planMode === 'template' ? (
-              <Button
-                onClick={() => selectedTemplate && handleUseTemplate(selectedTemplate)}
-                disabled={!canProceed || !selectedTemplate}
-                size="lg"
-              >
-                <Copy className="w-5 h-5 mr-2" />
-                Use Template
-              </Button>
-            ) : (
-              <Button
-                onClick={handleCreateManualPlan}
-                disabled={!canProceed}
-                size="lg"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create Manual Plan
-              </Button>
-            )}
+          {/* Step Navigation */}
+          <div className="flex justify-between items-center max-w-2xl mx-auto">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+              disabled={currentStep === 1}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Previous
+            </Button>
+            <div className="text-sm text-muted-foreground">
+              Step {currentStep} of 4
+            </div>
+            <Button
+              onClick={() => setCurrentStep(Math.min(4, currentStep + 1))}
+              disabled={
+                currentStep === 4 ||
+                (currentStep === 1 && !canProceedStep1) ||
+                (currentStep === 2 && !canProceedStep2) ||
+                (currentStep === 3 && !canProceedStep3)
+              }
+            >
+              Next
+              <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+            </Button>
           </div>
         </TabsContent>
 
@@ -730,8 +918,9 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <NutritionCards 
+                  <NutritionSummary 
                     data={getTotalNutrients()} 
+                    layout="cards"
                     showProgress={false}
                   />
                 </CardContent>
@@ -917,9 +1106,9 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
               )}
 
               <div className="flex justify-end">
-                <Button onClick={handleSavePlan} size="lg" className="px-8">
+                <Button onClick={handleSavePlan} size="lg" className="px-8" disabled={mealPlanLoading}>
                   <Save className="w-5 h-5 mr-2" />
-                  Save & Publish Plan
+                  {mealPlanLoading ? 'Saving...' : 'Save & Publish Plan'}
                 </Button>
               </div>
             </CardContent>
@@ -932,8 +1121,8 @@ function CreatePlanPage({ onBack, onPlanCreate, templates }: CreatePlanPageProps
         <div className="bg-destructive/15 border border-destructive/20 rounded-lg p-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />
           <p className="text-sm text-destructive">{mealPlanError}</p>
-          <Button variant="ghost" size="sm" onClick={clearError} className="ml-auto">
-            Dismiss
+          <Button variant="ghost" size="sm" onClick={() => window.location.reload()} className="ml-auto">
+            Retry
           </Button>
         </div>
       )}

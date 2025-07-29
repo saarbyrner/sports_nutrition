@@ -35,7 +35,7 @@ import {
 import Dashboard from "./Dashboard";
 import PlayerManagementReal from "./PlayerManagementReal";
 import PlayerProfile from "./PlayerProfile";
-import MealPlanManagementTest from "./MealPlanManagementTest";
+import MealPlanManagementReal from "./MealPlanManagementReal";
 import CreatePlanPage from "./CreatePlanPage";
 import Collaboration from "./Collaboration";
 import NutritionCalendarReal from "./NutritionCalendarReal";
@@ -166,7 +166,7 @@ export default function MainApp() {
         );
       case "ai-planning":
         return (
-          <MealPlanManagementTest 
+          <MealPlanManagementReal 
             onPlanSelect={(planId) => console.log('Selected plan:', planId)}
           />
         );

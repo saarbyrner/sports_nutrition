@@ -46,10 +46,10 @@ import {
   Target,
   Rocket
 } from 'lucide-react';
-import { useMealPlanService } from '@/hooks/useMealPlanService';
+import { useUnifiedMealPlan } from '@/hooks/useUnifiedMealPlan';
 import { CreateMealPlanData } from '@/lib/services/types';
-import { SimplePlayerSelector } from './shared/PlayerSelector';
-import { QuickNutritionSummary } from './shared/NutritionSummary';
+import { PlayerSelector } from './shared/PlayerSelector';
+import { NutritionSummary } from './shared/NutritionSummary';
 
 // Quick AI-generated sample plan for demonstration
 const quickSamplePlan = {
@@ -100,7 +100,7 @@ export default function CreatePlanModal({
   const [generatedPlan, setGeneratedPlan] = useState<any>(null);
   const [step, setStep] = useState<'setup' | 'preview' | 'success'>('setup');
 
-  const { createMealPlan, loading: mealPlanLoading, error: mealPlanError, clearError } = useMealPlanService();
+  const { createMealPlan, loading: mealPlanLoading, error: mealPlanError, clearError } = useUnifiedMealPlan();
 
   const handleGeneratePlan = async () => {
     if (!selectedPlayer || !planType || !duration) return;
@@ -171,7 +171,7 @@ export default function CreatePlanModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {step === 'setup' && <Rocket className="w-5 h-5" />}
@@ -193,10 +193,11 @@ export default function CreatePlanModal({
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Player *</label>
-              <SimplePlayerSelector
+              <PlayerSelector
                 value={selectedPlayer}
-                onValueChange={setSelectedPlayer}
+                onPlayerSelect={setSelectedPlayer}
                 placeholder="Select a player"
+                variant="simple"
               />
             </div>
 
@@ -261,7 +262,7 @@ export default function CreatePlanModal({
                       AI Generated
                     </Badge>
                   </div>
-                  <QuickNutritionSummary data={totalNutrition} />
+                  <NutritionSummary data={totalNutrition} layout="compact" />
                 </div>
               </CardContent>
             </Card>

@@ -75,23 +75,24 @@ export class UnifiedPlayerService extends BaseService {
           )
         `)
         .eq('users.role', 'player')
-        .order('users.last_name', { ascending: true })
 
       if (error) {
         return this.formatError(error)
       }
 
-      // Transform to consistent format
-      const summaries: PlayerSummary[] = data.map(player => ({
-        id: player.id,
-        name: player.user ? `${player.user.first_name} ${player.user.last_name}` : 'Unknown Player',
-        avatar: this.generateAvatar(player.user?.first_name, player.user?.last_name),
-        initials: this.generateInitials(player.user?.first_name, player.user?.last_name),
-        team: player.team,
-        sport: player.sport,
-        status: player.status,
-        email: player.user?.email || ''
-      }))
+      // Transform to consistent format and sort by name
+      const summaries: PlayerSummary[] = data
+        .map(player => ({
+          id: player.id,
+          name: player.user ? `${player.user.first_name} ${player.user.last_name}` : 'Unknown Player',
+          avatar: this.generateAvatar(player.user?.first_name, player.user?.last_name),
+          initials: this.generateInitials(player.user?.first_name, player.user?.last_name),
+          team: player.team,
+          sport: player.sport,
+          status: player.status,
+          email: player.user?.email || ''
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
       // Update cache
       this.updateCache(summaries)

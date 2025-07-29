@@ -51,15 +51,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
-import { useMealPlanService } from '@/hooks/useMealPlanService'
+import { useUnifiedMealPlan } from '@/hooks/useUnifiedMealPlan'
 import { MealPlan, Template } from '@/lib/services/types'
 import { format } from 'date-fns'
-import CreatePlanModal from './CreatePlanModalNew'
+import { EnhancedCreatePlanModal } from './meal-plan-creation/EnhancedCreatePlanModal'
 import CreatePlanPage from './CreatePlanPage'
 import TemplateDetailsModal from './TemplateDetailsModal'
 import MealPlanDetailsModal from './MealPlanDetailsModal'
 import TemplateEditorModal from './TemplateEditorModal'
 import MealPlanEditorModal from './MealPlanEditorModal'
+import { MealPlanErrorBoundary } from './ErrorBoundary'
 
 interface MealPlanManagementRealProps {
   onPlanSelect?: (planId: string) => void
@@ -87,16 +88,16 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
   const {
     loading,
     error,
-    clearError,
+    usingMockData,
     getMealPlans,
     getTemplates,
-    deleteMealPlan,
     getMealPlanStats,
     createMealPlan,
     updateMealPlan,
+    deleteMealPlan,
     createTemplate,
     updateTemplate
-  } = useMealPlanService()
+  } = useUnifiedMealPlan()
 
   const [stats, setStats] = useState({
     total: 0,
@@ -249,19 +250,25 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <MealPlanErrorBoundary>
+      <div className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Nutrition Planning</h1>
           <p className="text-muted-foreground">
             Create and manage personalized nutrition plans for your athletes
+            {usingMockData && <Badge variant="outline" className="ml-2">Demo Mode</Badge>}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={() => setShowCreatePage(true)}>
+          <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            New Plan
+            Quick Plan
+          </Button>
+          <Button variant="outline" onClick={() => setShowCreatePage(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Advanced Plan
           </Button>
         </div>
       </div>
@@ -271,8 +278,8 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         <div className="bg-destructive/15 border border-destructive/20 rounded-lg p-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive" />
           <p className="text-sm text-destructive">{error}</p>
-          <Button variant="ghost" size="sm" onClick={clearError} className="ml-auto">
-            Dismiss
+          <Button variant="ghost" size="sm" onClick={() => window.location.reload()} className="ml-auto">
+            Retry
           </Button>
         </div>
       )}
@@ -587,15 +594,11 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         </TabsContent>
       </Tabs>
 
-      {/* Create Plan Modal */}
-      <CreatePlanModal
+      {/* Enhanced Create Plan Modal */}
+      <EnhancedCreatePlanModal
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
         onPlanCreate={loadData}
-        onAdvancedCreate={() => {
-          setShowCreateModal(false);
-          setShowCreatePage(true);
-        }}
       />
 
       {/* Template Details Modal */}
@@ -629,6 +632,7 @@ export default function MealPlanManagementReal({ onPlanSelect }: MealPlanManagem
         onSave={handleSaveMealPlan}
         mode={editorMode}
       />
-    </div>
+      </div>
+    </MealPlanErrorBoundary>
   )
 }
